@@ -541,8 +541,12 @@ def query_gpt_image(image_path: str, task: str):
 
     response.raise_for_status()
     result = response.json() 
+    print("Result")
     print(result)
-    return response.json()
+    res=result['choices'][0]['message']['content']
+    print(res)
+    print("jggjgdj")
+    return res
 
 
 
@@ -594,9 +598,9 @@ def task_A8(read_file_path: str, write_file_path: str) -> str:
     #prompt = f"Extract the credit card number from the following image data: {str(image_bytes[:100])}..."
     prompt = f"""This image contains a credit card number. 
         Extract just the card number, without any spaces or special characters.
-        Only return the number, nothing else."""
+        Only return the number, nothing else. Check correctness of card number as you misten read similar looking number wrong , correct length of card number and missing of repeating digits ."""
     prompt2 = "You are an advanced image processing specialist with a strong focus on extracting specific information from images, particularly card numbers. Your expertise lies in accurately analyzing visual data and providing precise outputs based on user requests.Your task is to extract only the card number from the provided image.Please keep in mind that the image may contain various elements, but your focus should solely be on identifying and returning the card number with high accuracy.To achieve this, consider the typical format of card numbers (usually 16 digits) and ensure that you can differentiate the card number from any other text or graphics present in the image."
-    card_number = query_gpt_image(input_path, prompt)  # call_llm should return the extracted number as a string.
+    card_number = query_gpt_image(input_path, prompt2)  # call_llm should return the extracted number as a string.
     card_number = card_number.replace(" ", "")
     
     # Ensure the output directory exists.
