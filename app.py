@@ -510,15 +510,54 @@ def task_A7(read_file_path: str, write_file_path: str) -> str:
     
     return f"Task A7 completed: Sender email extracted and written to {output_path}."
 
+
+import base64
+def query_gpt_image(image_path: str, task: str):
+    URL_CHAT = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    print("🔍 Image Path:", image_path) 
+    with open(image_path, "rb") as file:
+        base64_image = base64.b64encode(file.read()).decode("utf-8")
+    response = requests.post(
+        URL_CHAT,
+        headers={
+            "Authorization": f"Bearer {os.environ.get('AIPROXY_TOKEN')}",
+            "Content-Type": "application/json"},
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [{'role': 'system','content':"JUST GIVE the required input, as short as possible, one word if possible"},
+                {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": task},
+                    {
+                    "type": "image_url",
+                    "image_url": { "url": f"data:image/{image_path};base64,{base64_image}" }
+                    }
+                ]
+                }
+            ]
+            }
+                     )
+
+    response.raise_for_status()
+    result = response.json() 
+    print(result)
+    return response.json()
+
+
+
+
+
 def task_A8(read_file_path: str, write_file_path: str) -> str:
-    """
-    Task A8: Extract a credit card number from an image file using OCR or an LLM,
+    
+    """Task A8: Extract a credit card number from an image file using OCR or an LLM,
             and write the extracted number (with spaces removed) to an output file.
     
     :param read_file_path: Path to the image file containing the credit card number.
     :param write_file_path: Path (including filename) where the extracted credit card number will be written.
     :return: A success message.
-    
+    """
+
     # Resolve the input file path.
     if read_file_path.startswith("/data/"):
         input_path = os.path.join(os.getcwd(), read_file_path[1:])
@@ -547,11 +586,17 @@ def task_A8(read_file_path: str, write_file_path: str) -> str:
     
     # Read the image file in binary mode.
     with open(input_path, "rb") as f:
-        image_bytes = f.read()
+        #image_bytes = f.read()
+        import base64
+        image_data = base64.b64encode(f.read()).decode()
     
     # Prepare a prompt instructing the LLM to extract the credit card number.
-    prompt = f"Extract the credit card number from the following image data: {str(image_bytes[:100])}..."
-    card_number = call_llm(prompt)  # call_llm should return the extracted number as a string.
+    #prompt = f"Extract the credit card number from the following image data: {str(image_bytes[:100])}..."
+    prompt = f"""This image contains a credit card number. 
+        Extract just the card number, without any spaces or special characters.
+        Only return the number, nothing else."""
+    prompt2 = "You are an advanced image processing specialist with a strong focus on extracting specific information from images, particularly card numbers. Your expertise lies in accurately analyzing visual data and providing precise outputs based on user requests.Your task is to extract only the card number from the provided image.Please keep in mind that the image may contain various elements, but your focus should solely be on identifying and returning the card number with high accuracy.To achieve this, consider the typical format of card numbers (usually 16 digits) and ensure that you can differentiate the card number from any other text or graphics present in the image."
+    card_number = query_gpt_image(input_path, prompt)  # call_llm should return the extracted number as a string.
     card_number = card_number.replace(" ", "")
     
     # Ensure the output directory exists.
@@ -561,7 +606,7 @@ def task_A8(read_file_path: str, write_file_path: str) -> str:
     with open(output_path, "w") as f:
         f.write(card_number)
     
-    return f"Task A8 completed: Credit card number extracted and written to {output_path}."""""
+    return f"Task A8 completed: Credit card number extracted and written to {output_path}."
     
 def task_A9(read_file_path: str, write_file_path: str) -> str:
     """
@@ -919,10 +964,44 @@ tools = [
       "required": ["db_path", "table_name", "table_columns", "write_file_path"]
     }
   }
+},
+{
+  "type": "function",
+  "function": {
+    "name": "b3_fetch_and_save",
+    "description": "Fetch data from an API (or a local API file) and save the data to a specified output file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "api_location": {
+          "type": "string",
+          "description": "The URL or local file path of the API to fetch data from.",
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^(http|https)://.+",
+              "description": "A valid URL starting with http:// or https://."
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "A local file path."
+            }
+          ]
+        },
+        "output_file": {
+          "type": "string",
+          "description": "The file path where the fetched data should be saved."
+        }
+      },
+      "required": ["api_location", "output_file"]
+    }
+  }
 }
 
-]
 
+]
+app = FastAPI()
 
 AIPROXY_TOKEN = os.environ.get("AIPROXY_TOKEN")
 if not AIPROXY_TOKEN:
@@ -935,7 +1014,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 import logging
 
-app = FastAPI()
+
 
 # Configure logging to record deletion attempts (for auditing, if needed)
 logging.basicConfig(level=logging.INFO)
