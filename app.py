@@ -957,24 +957,7 @@ def delete_file(path: str = Query(..., description="Path to file under /data to 
         detail="Deletion is disabled. Data is protected and will not be deleted."
     )
 
-@app.get("/read", response_class=PlainTextResponse)
-def read(path: str = Query(..., description="Path to file under /data to read.")):
-    base_dir = "/data"  # The allowed base directory
-    # Remove any leading "/" and resolve the absolute path relative to base_dir.
-    requested_path = os.path.abspath(os.path.join(base_dir, path.lstrip("/")))
-    
-    # Check that the requested file is within base_dir.
-    if not requested_path.startswith(os.path.abspath(base_dir)):
-        raise HTTPException(status_code=403, detail="Access to files outside /data is forbidden")
-    
-    try:
-        with open(requested_path, "r", encoding="utf-8") as f:
-            content = f.read()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error reading file: {e}")
-    
-    return content
-'''
+
 @app.get("/read", response_class=PlainTextResponse)
 def read(path: str = Query(..., description="Path to file under /data to read.")):
     path_new= path[1:]
@@ -1000,7 +983,7 @@ def read(path: str = Query(..., description="Path to file under /data to read.")
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    '''
+    
     
 
 
