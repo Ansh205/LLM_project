@@ -931,6 +931,31 @@ if not AIPROXY_TOKEN:
 def read_root():
     return {"message": "Hello from the Automation Agent!"}
 
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import PlainTextResponse
+import logging
+
+app = FastAPI()
+
+# Configure logging to record deletion attempts (for auditing, if needed)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.delete("/delete", response_class=PlainTextResponse)
+def delete_file(path: str = Query(..., description="Path to file under /data to delete.")):
+    """
+    Endpoint to handle deletion requests. 
+    For safety reasons, this endpoint does not delete any files.
+    Instead, it logs the attempt and returns an error.
+    """
+    # Log the deletion attempt
+    logger.info(f"Deletion attempt blocked for file: {path}")
+    
+    # Always raise an error to block deletion
+    raise HTTPException(
+        status_code=403, 
+        detail="Deletion is disabled. Data is protected and will not be deleted."
+    )
 
 @app.get("/read", response_class=PlainTextResponse)
 def read(path: str = Query(..., description="Path to file under /data to read.")):
