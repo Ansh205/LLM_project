@@ -1221,6 +1221,298 @@ def task_B7(image_location: str, output_file: str = None, target_width: int = No
 
 # Example usage:
 
+import os
+import requests
+import io
+import base64
+import speech_recognition as sr
+from pydub import AudioSegment
+from fastapi import HTTPException
+
+def task_B8(audio_file: str, output_file: str = None) -> str:
+    """
+    B8 Task: Transcribe audio from an MP3 file.
+    
+    Parameters:
+        audio_file (str): The URL or local file path of the MP3 audio file to transcribe.
+        output_file (str, optional): The file path where the transcription should be saved.
+                                     If it starts with "/data/", it is resolved relative to the current working directory.
+                                     If not provided and the audio_file is local, the transcription is returned without saving.
+    
+    Returns:
+        str: The transcription of the audio as a text string.
+    
+    Raises:
+        HTTPException: If an error occurs during fetching, converting, or transcribing the audio.
+    """
+    try:
+        # Determine if audio_file is a URL.
+        is_url = audio_file.startswith("http://") or audio_file.startswith("https://") or audio_file.startswith("www.")
+        if is_url:
+            if audio_file.startswith("www."):
+                audio_file = "http://" + audio_file
+            response = requests.get(audio_file)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail=f"Failed to fetch audio from URL. Status code: {response.status_code}")
+            mp3_data = response.content
+            # Save to a temporary in-memory file.
+            mp3_file = io.BytesIO(mp3_data)
+        else:
+            if not os.path.exists(audio_file):
+                raise HTTPException(status_code=400, detail=f"Local audio file not found: {audio_file}")
+            mp3_file = audio_file  # Use the local file path directly.
+        
+        # Convert the MP3 file to WAV using pydub.
+        try:
+            if is_url:
+                audio = AudioSegment.from_file(mp3_file, format="mp3")
+            else:
+                audio = AudioSegment.from_mp3(mp3_file)
+        except Exception as conv_err:
+            raise HTTPException(status_code=500, detail=f"Error converting MP3 to WAV: {conv_err}")
+        
+        # Export to a temporary WAV file in memory.
+        wav_io = io.BytesIO()
+        audio.export(wav_io, format="wav")
+        wav_io.seek(0)
+        
+        # Transcribe the audio using SpeechRecognition.
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_io) as source:
+            audio_data = recognizer.record(source)
+        try:
+            transcription = recognizer.recognize_google(audio_data)
+        except sr.RequestError as req_err:
+            raise HTTPException(status_code=500, detail=f"Speech recognition API error: {req_err}")
+        except sr.UnknownValueError:
+            transcription = "Unable to transcribe audio."
+        
+        # If an output_file is provided, resolve the file path.
+        if output_file:
+            if output_file.startswith("/data/"):
+                resolved_output_file = os.path.join(os.getcwd(), output_file[1:])
+            else:
+                resolved_output_file = output_file if os.path.isabs(output_file) else os.path.join(os.getcwd(), output_file)
+            print("Resolved output file path:", resolved_output_file)
+            
+            # Ensure the directory exists.
+            os.makedirs(os.path.dirname(resolved_output_file), exist_ok=True)
+            
+            # Write the transcription to the output file.
+            with open(resolved_output_file, "w", encoding="utf-8") as f:
+                f.write(transcription)
+            
+            return f"Transcription saved to '{resolved_output_file}':\n{transcription}"
+        else:
+            # If no output file is given, simply return the transcription.
+            return transcription
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in B8 task: {e}")
+
+
+import os
+import requests
+import io
+import markdown
+from fastapi import HTTPException
+
+def task_B9(markdown_file: str, output_file: str = None) -> str:
+    """
+    B9 Task: Convert a Markdown file to HTML.
+    
+    Parameters:
+        markdown_file (str): The URL or local file path of the Markdown file.
+        output_file (str, optional): The file path where the HTML output should be saved.
+                                     If it starts with "/data/", it is resolved relative to the current working directory.
+                                     If not provided and the markdown_file is local, the Markdown file is updated in place.
+    
+    Returns:
+        str: A message indicating success and the location of the HTML output, or the HTML content.
+    
+    Raises:
+        HTTPException: If an error occurs during file retrieval, conversion, or file operations.
+    """
+    try:
+        # Determine if markdown_file is a URL.
+        is_url = markdown_file.startswith("http://") or markdown_file.startswith("https://") or markdown_file.startswith("www.")
+        if is_url:
+            if markdown_file.startswith("www."):
+                markdown_file = "http://" + markdown_file
+            response = requests.get(markdown_file)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail=f"Failed to fetch Markdown from URL. Status code: {response.status_code}")
+            md_content = response.text
+        else:
+            if not os.path.exists(markdown_file):
+                raise HTTPException(status_code=400, detail=f"Local Markdown file not found: {markdown_file}")
+            with open(markdown_file, "r", encoding="utf-8") as f:
+                md_content = f.read()
+        
+        # Convert Markdown to HTML using the markdown package.
+        html_content = markdown.markdown(md_content)
+        
+        # Determine output file path.
+        if output_file:
+            if output_file.startswith("/data/"):
+                resolved_output_file = os.path.join(os.getcwd(), output_file[1:])
+            else:
+                resolved_output_file = output_file if os.path.isabs(output_file) else os.path.join(os.getcwd(), output_file)
+        else:
+            # If no output file is provided, then update in place (only allowed for local files).
+            if is_url:
+                raise HTTPException(status_code=400, detail="For Markdown from a URL, an output_file must be provided.")
+            resolved_output_file = markdown_file
+        
+        print("Resolved output file path:", resolved_output_file)
+        
+        # Ensure the directory exists.
+        os.makedirs(os.path.dirname(resolved_output_file), exist_ok=True)
+        
+        # Write the HTML output to the file.
+        with open(resolved_output_file, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        
+        return f"Markdown successfully converted to HTML and saved to '{resolved_output_file}'."
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in B9 task: {e}")
+
+
+import os
+import json
+import requests
+from fastapi import HTTPException
+import pandas as pd
+from io import StringIO
+
+def convert_plain_english_to_filter_query(filter_query: str) -> str:
+    """
+    Convert a plain English filter condition into a pandas query string using an LLM.
+    
+    Parameters:
+        filter_query (str): The plain English description of the filtering condition.
+    
+    Returns:
+        str: The pandas query string.
+    """
+    URL_CHAT = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    prompt = (
+        f"Convert the following plain English filter condition into a valid pandas query string:\n\n"
+        f"{filter_query}\n\n"
+        "Pandas Query:"
+    )
+    
+    response = requests.post(
+        URL_CHAT,
+        headers={
+            "Authorization": f"Bearer {os.environ.get('AIPROXY_TOKEN')}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "JUST GIVE the pandas query string only, without any extra explanation."},
+                {"role": "user", "content": prompt}
+            ]
+        }
+    )
+    response.raise_for_status()
+    result = response.json()
+    pandas_query = result["choices"][0]["message"]["content"].strip()
+    print("Converted Pandas Query:", pandas_query)
+    return pandas_query
+
+def task_B10(csv_file: str, filter_query: str) -> str:
+    """
+    B10 Task: Filter a CSV file based on a plain English filter condition and return the results as JSON.
+    
+    The function converts the plain English filter condition into a pandas query string using an LLM.
+    It then loads the CSV file (from a URL or local file path), applies the filter, and returns the filtered data as a JSON-formatted string.
+    
+    Parameters:
+        csv_file (str): The URL or local file path of the CSV file.
+        filter_query (str): A plain English description of the filtering condition.
+    
+    Returns:
+        str: A JSON-formatted string containing the filtered data (list of dictionaries).
+    
+    Raises:
+        HTTPException: If an error occurs during CSV loading, query conversion, or filtering.
+    """
+    try:
+        # Determine if csv_file is a URL.
+        is_url = csv_file.startswith("http://") or csv_file.startswith("https://") or csv_file.startswith("www.")
+        if is_url:
+            if csv_file.startswith("www."):
+                csv_file = "http://" + csv_file
+            response = requests.get(csv_file)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail=f"Failed to fetch CSV from URL. Status code: {response.status_code}")
+            csv_data = response.content.decode("utf-8")
+            csv_io = StringIO(csv_data)
+        else:
+            if not os.path.exists(csv_file):
+                raise HTTPException(status_code=400, detail=f"Local CSV file not found: {csv_file}")
+            csv_io = csv_file
+        
+        # Read the CSV into a pandas DataFrame.
+        df = pd.read_csv(csv_io)
+        
+        # Convert the plain English filter condition into a pandas query string using an LLM.
+        pandas_query = convert_plain_english_to_filter_query(filter_query)
+        
+        # Filter the DataFrame.
+        filtered_df = df.query(pandas_query)
+        
+        # Convert the filtered DataFrame to JSON.
+        results_json = filtered_df.to_json(orient="records", indent=2)
+        return results_json
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in B10 task: {e}")
+
+
+def process_task(task: str) -> str:
+    """
+    Process a given plain English task using an LLM and return the output.
+    
+    Parameters:
+        task (str): A plain English description of the task to be processed.
+        
+    Returns:
+        str: The output returned by the LLM.
+    """
+    URL_CHAT = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    print("Processing task:", task)
+    
+    response = requests.post(
+        URL_CHAT,
+        headers={
+            "Authorization": f"Bearer {os.environ.get('AIPROXY_TOKEN')}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant that processes tasks and returns concise outputs."},
+                {"role": "user", "content": task}
+            ]
+        }
+    )
+    
+    response.raise_for_status()
+    result = response.json()
+    print("LLM Raw Response:")
+    print(result)
+    
+    output = result['choices'][0]['message']['content'].strip()
+    print("Processed Output:", output)
+    
+    return output
+
+
+
 tools = [
     {
         "type": "function",
@@ -1631,7 +1923,92 @@ tools = [
       "required": ["image_location"]
     }
   }
+},
+{
+  "type": "function",
+  "function": {
+    "name": "b8_transcribe_audio",
+    "description": "Transcribe audio from an MP3 file. The tool accepts an MP3 audio file (URL or local file path) and an optional output file path. It transcribes the audio and returns the transcription as text. If an output file is provided, the transcription is also saved there.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "audio_file": {
+          "type": "string",
+          "description": "The URL or local file path of the MP3 audio file to transcribe."
+        },
+        "output_file": {
+          "type": "string",
+          "description": "Optional. The file path where the transcription should be saved. If it starts with '/data/', it is resolved relative to the current working directory."
+        }
+      },
+      "required": ["audio_file"]
+    }
+  }
+},
+{
+  "type": "function",
+  "function": {
+    "name": "b9_markdown_to_html",
+    "description": "Convert a Markdown file to HTML. The tool accepts a Markdown file location (URL or local file path) and an optional output file path. If no output file is provided and the Markdown file is local, the file is updated in place.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "markdown_file": {
+          "type": "string",
+          "description": "The URL or local file path of the Markdown file to convert to HTML."
+        },
+        "output_file": {
+          "type": "string",
+          "description": "Optional. The file path where the HTML output should be saved. If not provided and the input is local, the Markdown file is replaced with the HTML content."
+        }
+      },
+      "required": ["markdown_file"]
+    }
+  }
+},
+
+{
+  "type": "function",
+  "function": {
+    "name": "b10_filter_csv_to_json",
+    "description": "Filter a CSV file based on a plain English filter condition and return the filtered data as a JSON-formatted string. The CSV file can be provided as a URL or a local file path. The plain English filter condition is converted into a pandas query string using an LLM.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "csv_file": {
+          "type": "string",
+          "description": "The URL or local file path of the CSV file to filter."
+        },
+        "filter_query": {
+          "type": "string",
+          "description": "A plain English description of the filter condition (e.g., 'show rows where Age > 30 and Country is USA')."
+        }
+      },
+      "required": ["csv_file", "filter_query"]
+    }
+  }
+},
+{
+  "type": "function",
+  "function": {
+    "name": "process_task",
+    "description": "Process a given plain English task using an LLM and return the output.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "type": "string",
+          "description": "A plain English description of the task to be processed."
+        }
+      },
+      "required": ["task"]
+    }
+  }
 }
+
+
+
+
 
 
 
@@ -1762,8 +2139,7 @@ def run(task: str = Query(..., description="The plain‑English task description
     elif tool_name == "extract_first_lines":
         result = task_A5(arguments['file_type'], arguments['read_file_path'], arguments['write_file_path'], arguments['count'])
     elif tool_name == "index_docs":
-        result = task_A6(
-            arguments['file_type'],arguments['read_file_path'],arguments['write_file_path'],arguments['extract_condition'],arguments.get('relative_prefix', None))
+        result = task_A6(arguments['file_type'],arguments['read_file_path'],arguments['write_file_path'],arguments['extract_condition'],arguments.get('relative_prefix', None))
     elif tool_name == "extract_email_sender":
         result = task_A7(arguments['read_file_path'], arguments['write_file_path'])
     elif tool_name == "extract_credit_card":
@@ -1782,8 +2158,19 @@ def run(task: str = Query(..., description="The plain‑English task description
         result = task_B6(arguments['website_url'], arguments['extraction_instructions'], arguments['output_file'])
     elif tool_name == "b7_resize_or_compress_image":
         result = task_B7(arguments['image_location'], arguments.get('target_width', None), arguments.get('target_height', None), arguments.get('quality', None))
+    elif tool_name == "b8_transcribe_audio":
+        result = task_B8(arguments['audio_location'], arguments.get('output_file', None))
+    elif tool_name == "b9_markdown_to_html":
+        result = task_B9(arguments['markdown_file'], arguments.get('output_file', None))        
+    elif tool_name == "b10_filter_csv_to_json":
+        result = task_B10(arguments['csv_file'], arguments['filter_query'])
+    elif tool_name == "process_task":
+        result = process_task(task)
+        #print(result)
     else:
         raise HTTPException(status_code=500, detail="Invalid tool name: " + tool_name)
+
+
 
 
 
