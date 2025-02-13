@@ -193,7 +193,9 @@ def task_A2(file: str, prettier_version: str) -> str:
     
     try:
         #command = ["npx.cmd", f"prettier@{prettier_version}", "--write", file_path]
-        subprocess.run(["npx", f"prettier@{prettier_version}", "--write", file_path])
+        subprocess.run(["npx", f"prettier@{prettier_version}", "--write", file_path], check=True)
+
+        #subprocess.run(["npx", f"prettier@{prettier_version}", "--write", file_path])
 
         #subprocess.run(command, check=True)
         return f"Task A2 completed: Markdown file formatted using prettier@{prettier_version}."
@@ -702,8 +704,12 @@ tools = [
                         "type": "string",
                         "description": "Path to the Markdown file to format."
                     },
+                    "prettier_version": {
+                        "type": "string",
+                        "description": "Version of Prettier to use."
+                    },
                 },
-                "required": ["file_path"]
+                "required": ["file_path", "prettier_version"]
             }
         }
     },
@@ -926,72 +932,31 @@ def read_root():
     return {"message": "Hello from the Automation Agent!"}
 
 
-'''@app.get("/read", response_class=PlainTextResponse)
+@app.get("/read", response_class=PlainTextResponse)
 def read(path: str = Query(..., description="Path to file under /data to read.")):
-    try:
-        # Set allowed root to your project's data folder.
-        #allowed_root = os.path.join(os.getcwd(), "data")
-        #validate_path(path, allowed_root)
-        #if not os.path.exists(path):
-        #    raise HTTPException(status_code=404, detail="File not found")
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return content
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/run")
-def run(task: str = Query(..., description="The plain‑English task description.")):
-    url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {AIPROXY_TOKEN}",
-        "Content-Type": "application/json" 
-    }
-    data={
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-                "role": "user", "content": task
-            },
-            {
-                "role": "system",
-                "content": """
-                
-                You are an assistant who has to do a varity of tasks
-                if your task involves running a script, you can use script_runner tool.
-                If your task involves writing a code, you can use the task_runner tool.
-                """
-                
-            }
-        ],
-        "tools": tools,
-        "tool_choice":"auto"
-    }
-    response = requests.post(url=url, headers=headers, json=data)
-    #return response.json()['choices'][0]['message']['tool_calls'][0]['function']
-    raw_args =response.json()['choices'][0]['message']['tool_calls'][0]['function']['arguments']
-    if isinstance(raw_args, str):
-        arguments = json.loads(raw_args)
-    else:
-        arguments = raw_args
+    base_dir = "/data"  # The allowed base directory
+    # Remove any leading "/" and resolve the absolute path relative to base_dir.
+    requested_path = os.path.abspath(os.path.join(base_dir, path.lstrip("/")))
     
-    script_url=arguments['script_url']
-    email=arguments['args'][0]
-    print(script_url,email)
-    task_A1(script_url, email)
-    #command= ["uv", "run", script_url, email]
-    #subprocess.run(command)
-    '''
+    # Check that the requested file is within base_dir.
+    if not requested_path.startswith(os.path.abspath(base_dir)):
+        raise HTTPException(status_code=403, detail="Access to files outside /data is forbidden")
+    
+    try:
+        with open(requested_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error reading file: {e}")
+    
+    return content
+'''
 @app.get("/read", response_class=PlainTextResponse)
 def read(path: str = Query(..., description="Path to file under /data to read.")):
     path_new= path[1:]
     with open(path_new, "r", encoding="utf-8") as f:
         content = f.read()
     return content
-    '''
+    
     try:
         # If the path starts with "/data/", treat it as relative to the current working directory.
         if path.startswith("/data/"):
@@ -1060,7 +1025,7 @@ def run(task: str = Query(..., description="The plain‑English task description
     if tool_name == "script_runner":
         result = task_A1(arguments['script_url'], arguments['args'])
     elif tool_name == "format_markdown":
-        result = task_A2(arguments['file_path'])
+        result = task_A2(arguments['file_path'], arguments['prettier_version'])
     elif tool_name == "count_weekday":
         result = task_A3(arguments['read_file_path'], arguments['write_file_path'], arguments['weekday'])
     elif tool_name == "sort_contacts":
