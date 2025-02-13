@@ -865,7 +865,161 @@ def task_B4(repo_url: str, file_to_commit: str, local_dir: str = None, commit_me
         raise HTTPException(status_code=500, detail=f"Error in B4 task: {e}")
 
 
+import os
+import requests
 
+def convert_plain_english_to_sql(query: str, db_type: str) -> str:
+    URL_CHAT = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    print("🔍 Plain English Query:", query)
+    
+    # Construct a task for the LLM: convert plain English into a SQL query for the given db_type.
+    task = f"Convert the following plain English description into a SQL query for a {db_type} database:\n\n{query}\n\nSQL Query:"
+    
+    response = requests.post(
+        URL_CHAT,
+        headers={
+            "Authorization": f"Bearer {os.environ.get('AIPROXY_TOKEN')}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "JUST GIVE the SQL query only, without any explanation or extra text."
+                },
+                {
+                    "role": "user",
+                    "content": task
+                }
+            ]
+        }
+    )
+    
+    response.raise_for_status()
+    result = response.json()
+    print("Result:")
+    print(result)
+    
+    # Extract the SQL query from the LLM's response.
+    sql_query = result['choices'][0]['message']['content']
+    print("SQL Query:", sql_query)
+    
+    return sql_query
+
+import sqlite3
+import duckdb
+
+def task_B5(db_path: str, query: str, output_file: str, db_type: str = "sqlite") -> str:
+    """
+    B5 Task: Run a SQL query on a SQLite or DuckDB database, then write the query results to the specified output file.
+    
+    The plain English query is converted to SQL using an LLM. The results are formatted as JSON.
+    The output file path is resolved so that if it starts with '/data/', it is relative to the current working directory.
+    
+    Parameters:
+        db_path (str): The file path to the database.
+        query (str): A plain English description of the SQL query.
+        output_file (str): The file path where the query results should be written.
+        db_type (str, optional): The type of the database ("sqlite" or "duckdb"). Defaults to "sqlite".
+    
+    Returns:
+        str: A message indicating the query was executed and results written.
+    
+    Raises:
+        HTTPException: If any error occurs during conversion, query execution, or file operations.
+    """
+    try:
+        # Convert plain English to SQL.
+        sql_query = convert_plain_english_to_sql(query, db_type)
+        
+        # Execute the SQL query based on the database type.
+        if db_type.lower() == "sqlite":
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(sql_query)
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            results = [dict(zip(columns, row)) for row in rows]
+            conn.close()
+        elif db_type.lower() == "duckdb":
+            conn = duckdb.connect(database=db_path, read_only=False)
+            cursor = conn.cursor()
+            cursor.execute(sql_query)
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            results = [dict(zip(columns, row)) for row in rows]
+            conn.close()
+        else:
+            raise HTTPException(status_code=400, detail="Invalid db_type. Must be 'sqlite' or 'duckdb'.")
+        
+        # Convert query results to a JSON-formatted string.
+        results_json = json.dumps(results, indent=2)
+        
+        # Resolve the output file path.
+        if output_file.startswith("/data/"):
+            out_path = os.path.join(os.getcwd(), output_file[1:])
+        else:
+            out_path = output_file if os.path.isabs(output_file) else os.path.join(os.getcwd(), output_file)
+        print("Resolved output file path:", out_path)
+        
+        # Ensure the directory exists.
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        
+        # Write the JSON results to the output file.
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(results_json)
+        
+        return f"Query executed successfully. Results written to '{out_path}'."
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in B5 task: {e}")
+def b5_run_sql_query(db_path: str, query: str, db_type: str = "sqlite") -> str:
+    """
+    B5 Task: Run a SQL query on a SQLite or DuckDB database.
+    
+    The provided query is in plain English and is converted to a SQL query using an LLM.
+    The SQL query is then executed on the specified database, and the results are returned as a JSON-formatted string.
+    
+    Parameters:
+        db_path (str): The file path to the database.
+        query (str): A plain English description of the SQL query to execute.
+        db_type (str, optional): The type of database ("sqlite" or "duckdb"). Defaults to "sqlite".
+    
+    Returns:
+        str: A JSON-formatted string containing the query results.
+    
+    Raises:
+        HTTPException: If an error occurs during query conversion or execution.
+    """
+    try:
+        # Convert the plain English query to SQL using the LLM.
+        sql_query = convert_plain_english_to_sql(query, db_type)
+        print("Converted SQL Query:", sql_query)
+        
+        if db_type.lower() == "sqlite":
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(sql_query)
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            results = [dict(zip(columns, row)) for row in rows]
+            conn.close()
+        elif db_type.lower() == "duckdb":
+            conn = duckdb.connect(database=db_path, read_only=False)
+            cursor = conn.cursor()
+            cursor.execute(sql_query)
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            results = [dict(zip(columns, row)) for row in rows]
+            conn.close()
+        else:
+            raise HTTPException(status_code=400, detail="Invalid db_type. Must be 'sqlite' or 'duckdb'.")
+        
+        return json.dumps(results, indent=2)
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in B5 task: {e}")
 
 
 
@@ -1192,7 +1346,39 @@ tools = [
       "required": ["repo_url", "file_to_commit"]
     }
   }
+},
+{
+  "type": "function",
+  "function": {
+    "name": "b5_run_sql_query",
+    "description": "Run a SQL query on a SQLite or DuckDB database. The provided query is given in plain English and will be converted into a valid SQL query using an LLM. The query results are then written to the specified output file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "db_path": {
+          "type": "string",
+          "description": "The file path to the database. For SQLite, this is typically a .db file; for DuckDB, it can be a .duckdb file."
+        },
+        "query": {
+          "type": "string",
+          "description": "A plain English description of the SQL query to execute."
+        },
+        "db_type": {
+          "type": "string",
+          "enum": ["sqlite", "duckdb"],
+          "description": "The type of the database. Defaults to 'sqlite' if not provided."
+        },
+        "output_file": {
+          "type": "string",
+          "description": "The file path where the query results will be written. If it starts with '/data/', it will be resolved relative to the current working directory."
+        }
+      },
+      "required": ["db_path", "query", "output_file"]
+    }
+  }
 }
+
+
 
 
 
@@ -1333,6 +1519,8 @@ def run(task: str = Query(..., description="The plain‑English task description
         result = task_B3(arguments['api_location'], arguments['output_file'])
     elif tool_name == "b4_clone_and_commit":
         result = task_B4(arguments['repo_url'], arguments['file_to_commit'],arguments.get('local_dir', None), arguments.get('commit_message', None), arguments.get('modification_text', None))
+    elif tool_name == "b5_run_sql_query":
+        result = task_B5(arguments['db_path'], arguments['query'], arguments['write_file_path'])
     else:
         raise HTTPException(status_code=500, detail="Invalid tool name: " + tool_name)
 
