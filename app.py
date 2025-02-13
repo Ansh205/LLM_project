@@ -960,18 +960,20 @@ def delete_file(path: str = Query(..., description="Path to file under /data to 
 
 @app.get("/read", response_class=PlainTextResponse)
 def read(path: str = Query(..., description="Path to file under /data to read.")):
-    path_new= path[1:]
-    with open(path_new, "r", encoding="utf-8") as f:
-        content = f.read()
-    return content
+    #path_new= path[1:]
+    #with open(path_new, "r", encoding="utf-8") as f:
+    #    content = f.read()
+    #return content
     
     try:
         # If the path starts with "/data/", treat it as relative to the current working directory.
         if path.startswith("/data/"):
             actual_path = os.path.join(os.getcwd(), path[1:])  # Remove the leading slash.
+        elif path.startswith("data/"):    
+            actual_path = os.path.join(os.getcwd(), path)
         else:
             # If the path is not absolute, join with the current working directory.
-            actual_path = path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
+            return "Access outside data not allowed"
         
         if not os.path.exists(actual_path):
             raise HTTPException(status_code=404, detail=f"File not found: {actual_path}")
