@@ -717,6 +717,159 @@ def task_A10(db_path: str, table_name: str, table_columns: list, write_file_path
     return f"Task A10 completed: Total computed as {result} and written to {output_path}."
 
 
+import os
+import requests
+from fastapi import HTTPException
+import os
+import requests
+import json
+from fastapi import HTTPException
+
+def task_B3(api_location: str, output_file: str) -> str:
+    """
+    B3 Task: Fetch data from an API (or local file) and save it to a specified output file.
+    The function automatically determines if api_location is a URL or a local file path by checking its prefix.
+    It also resolves the output file path as follows:
+      - If output_file starts with "/data/", it will be resolved as a folder relative to the current working directory.
+      - Otherwise, if it's absolute, it remains as-is; if relative, it is joined with the current working directory.
+    
+    Parameters:
+        api_location (str): The URL or local file path to fetch data from.
+        output_file (str): The file path where the fetched data should be saved.
+    
+    Returns:
+        str: A success message indicating which source type was used and the resolved output file path.
+    
+    Raises:
+        HTTPException: For any errors encountered during data fetching or file operations.
+    """
+    try:
+        # Determine if api_location is a URL or a local file path.
+        if api_location.startswith("http://") or api_location.startswith("https://") or api_location.startswith("www."):
+            # If it starts with "www.", prepend "http://"
+            if api_location.startswith("www."):
+                api_location = "http://" + api_location
+            # Fetch data from the URL.
+            response = requests.get(api_location)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail=f"Failed to fetch data from URL. Status code: {response.status_code}")
+            data = response.text
+            source_type = "URL"
+        else:
+            # Otherwise, treat it as a local file path.
+            if not os.path.exists(api_location):
+                raise HTTPException(status_code=400, detail=f"Local file not found: {api_location}")
+            with open(api_location, "r", encoding="utf-8") as f:
+                data = f.read()
+            source_type = "Local"
+        
+        # Resolve the output file path using your provided logic:
+        if output_file.startswith("/data/") or output_file.startswith("/"):
+            wfile_path = os.path.join(os.getcwd(), output_file[1:])
+        else:
+            wfile_path = output_file if os.path.isabs(output_file) else os.path.join(os.getcwd(), output_file)
+        
+        print("Resolved output file path:", wfile_path)
+        
+        # Create the directory for the output file if it doesn't exist.
+        os.makedirs(os.path.dirname(wfile_path), exist_ok=True)
+        
+        # Write the fetched data to the resolved output file.
+        with open(wfile_path, "w", encoding="utf-8") as f:
+            f.write(data)
+        
+        return f"Data successfully fetched from '{api_location}' as {source_type} and saved to '{wfile_path}'."
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in B3 task: {e}")
+
+import subprocess
+import os
+from fastapi import HTTPException
+
+import subprocess
+import os
+from fastapi import HTTPException
+
+def task_B4(repo_url: str, file_to_commit: str, local_dir: str = None, commit_message: str = None, modification_text: str = None) -> str:
+    """
+    B4 Task: Clone a git repository, modify a file, commit the changes, and push to the remote.
+    
+    Parameters:
+        repo_url (str): The URL of the git repository to clone.
+        file_to_commit (str): The relative file path (from the repository root) to the file to modify.
+        local_dir (str, optional): The local directory where the repository will be cloned. 
+                                   If not provided, a default directory based on the repository name is created.
+        commit_message (str, optional): The commit message for the new commit.
+                                        If not provided, a default message is used.
+        modification_text (str, optional): The text to add or append to the target file.
+                                           If the file contains content, this text is appended; 
+                                           if the file is empty or missing, this text is written to it.
+                                           If not provided, defaults to "Hello from task b4".
+    
+    Returns:
+        str: A success message indicating the repository was cloned, modified, committed, and pushed.
+    
+    Raises:
+        HTTPException: If any Git command fails.
+    """
+    try:
+        # Use default local directory if not provided.
+        if not local_dir:
+            repo_name = repo_url.rstrip("/").split("/")[-1]
+            local_dir = f"{repo_name}_clone"
+        
+        # Use a default commit message if not provided.
+        if not commit_message:
+            commit_message = "Automated commit via B4 task."
+        
+        # Use default modification text if not provided.
+        if not modification_text:
+            modification_text = "Hello from task b4"
+        
+        # Clone the repository into the specified local directory.
+        subprocess.run(["git", "clone", repo_url, local_dir], check=True)
+        
+        # Change working directory to the cloned repository.
+        os.chdir(local_dir)
+        
+        # Modify the file: if it exists, read its content; if non-empty, append modification_text; else write modification_text.
+        if os.path.exists(file_to_commit):
+            with open(file_to_commit, "r", encoding="utf-8") as f:
+                content = f.read()
+            if content.strip():
+                # Append a newline and then the modification text.
+                content += "\n" + modification_text
+            else:
+                content = modification_text
+        else:
+            # If the file doesn't exist, create it with the modification text.
+            content = modification_text
+        
+        # Write the modified content to the file.
+        with open(file_to_commit, "w", encoding="utf-8") as f:
+            f.write(content)
+        
+        # Stage the modified file.
+        subprocess.run(["git", "add", file_to_commit], check=True)
+        
+        # Commit the change with the commit message.
+        subprocess.run(["git", "commit", "-m", commit_message], check=True)
+        
+        # Push the commit to the remote repository (assuming branch is 'main').
+        subprocess.run(["git", "push", "origin", "master"], check=True)
+        
+        return "Clone, file modification, commit, and push completed successfully."
+    
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=f"Error in B4 task: {e}")
+
+
+
+
+
+
+
 tools = [
     {
         "type": "function",
@@ -973,18 +1126,23 @@ tools = [
   "type": "function",
   "function": {
     "name": "b3_fetch_and_save",
-    "description": "Fetch data from an API (or a local API file) and save the data to a specified output file.",
+    "description": "Fetch data from an API (or local file) and save it to a specified output file. The tool uses an LLM to determine if the input is a URL or a local file path.",
     "parameters": {
       "type": "object",
       "properties": {
         "api_location": {
           "type": "string",
-          "description": "The URL or local file path of the API to fetch data from.",
+          "description": "The URL or local file path to fetch data from.",
           "oneOf": [
             {
               "type": "string",
               "pattern": "^(http|https)://.+",
               "description": "A valid URL starting with http:// or https://."
+            },
+            {
+              "type": "string",
+              "pattern": "^www\\..+",
+              "description": "A valid URL starting with www."
             },
             {
               "type": "string",
@@ -1001,7 +1159,42 @@ tools = [
       "required": ["api_location", "output_file"]
     }
   }
+},
+{
+  "type": "function",
+  "function": {
+    "name": "b4_clone_and_commit",
+    "description": "Clone a git repository and make a commit. If no local directory is provided, a default directory is created. If no commit message is provided, a default message is used.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "repo_url": {
+          "type": "string",
+          "description": "The URL of the git repository to clone."
+        },
+        "file_to_commit": {
+          "type": "string",
+          "description": "The relative path (from the repository root) to the file that should be added and committed."
+        },
+        "local_dir": {
+          "type": "string",
+          "description": "Optional. The local directory where the repository should be cloned. If not provided, a default directory is created based on the repository name."
+        },
+        "commit_message": {
+          "type": "string",
+          "description": "Optional. The commit message to use when making the commit. If not provided, a default message is used."
+        },
+        "modification_text": {
+          "type": "string",
+          "description": "Optional. The text to add or append to the target file. If the file already has content, this text is appended. If not, this text is written to the file. If not provided, 'Hello from task b4' is used."
+        }
+      },
+      "required": ["repo_url", "file_to_commit"]
+    }
+  }
 }
+
+
 
 
 ]
@@ -1136,6 +1329,10 @@ def run(task: str = Query(..., description="The plain‑English task description
         result = task_A9(arguments['read_file_path'], arguments['write_file_path'])
     elif tool_name == "compute_ticket_sales":
         result = task_A10(arguments['db_path'], arguments['table_name'], arguments['table_columns'], arguments['write_file_path'])
+    elif tool_name == "b3_fetch_and_save":
+        result = task_B3(arguments['api_location'], arguments['output_file'])
+    elif tool_name == "b4_clone_and_commit":
+        result = task_B4(arguments['repo_url'], arguments['file_to_commit'],arguments.get('local_dir', None), arguments.get('commit_message', None), arguments.get('modification_text', None))
     else:
         raise HTTPException(status_code=500, detail="Invalid tool name: " + tool_name)
 
