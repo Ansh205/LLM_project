@@ -85,7 +85,7 @@ async def read(path: str):
 async def a1(email: str, **kwargs):
     await run(
         f"""
-Install `uv` (if required) and download `https://raw.githubusercontent.com/ANdIeCOOl/TDS-Project1-Ollama_FastAPI-/refs/heads/main/datagen.py` and then run the downloaded file with uv
+Install `uv` (if required) and download `https://raw.githubusercontent.com/sanand0/tools-in-data-science-public/tds-2025-01/project-1/datagen.py` and then run the downloaded file with uv
 with `{email}` as the only argument. NOTE DO NO NEED uvicorn just uv.
 """
     )

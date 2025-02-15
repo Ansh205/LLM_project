@@ -510,7 +510,7 @@ def task_A7(read_file_path: str, write_file_path: str) -> str:
     
     return f"Task A7 completed: Sender email extracted and written to {output_path}."
 
-
+'''
 import base64
 def query_gpt_image(image_path: str, task: str):
     URL_CHAT = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
@@ -611,7 +611,126 @@ def task_A8(read_file_path: str, write_file_path: str) -> str:
         f.write(card_number)
     
     return f"Task A8 completed: Credit card number extracted and written to {output_path}."
+    '''
+
+
+import base64
+def query_gpt_image(image_path: str, task: str):
+    URL_CHAT = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    print("🔍 Image Path:", image_path) 
+    with open(image_path, "rb") as file:
+        base64_image = base64.b64encode(file.read()).decode("utf-8")
+    response = requests.post(
+        URL_CHAT,
+        headers={
+            "Authorization": f"Bearer {os.environ.get('AIPROXY_TOKEN')}",
+            "Content-Type": "application/json"},
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [{'role': 'system','content':"JUST GIVE the required input, as short as possible, one word if possible"},
+                {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": task},
+                    {
+                    "type": "image_url",
+                    "image_url": { "url": f"data:image/{image_path};base64,{base64_image}" }
+                    }
+                ]
+                }
+            ]
+            }
+                     )
+
+    response.raise_for_status()
+    result = response.json() 
+    print("Result")
+    print(result)
+    res=result['choices'][0]['message']['content']
+    print(res)
+    print("jggjgdj")
+    return res
+
+
+
+
+
+def task_A8(read_file_path: str, write_file_path: str) -> str:
     
+    """Task A8: Extract a credit card number from an image file using OCR or an LLM,
+            and write the extracted number (with spaces removed) to an output file.
+    
+    :param read_file_path: Path to the image file containing the credit card number.
+    :param write_file_path: Path (including filename) where the extracted credit card number will be written.
+    :return: A success message.
+    """
+
+    # Resolve the input file path.
+    if read_file_path.startswith("/data/"):
+        input_path = os.path.join(os.getcwd(), read_file_path[1:])
+    else:
+        if os.path.isabs(read_file_path):
+            input_path = read_file_path
+        else:
+            input_path = os.path.join(os.getcwd(), read_file_path)
+    
+    print("Resolved input image path:", input_path)
+    
+    # Resolve the output file path.
+    if write_file_path.startswith("/data/"):
+        output_path = os.path.join(os.getcwd(), write_file_path[1:])
+    else:
+        if os.path.isabs(write_file_path):
+            output_path = write_file_path
+        else:
+            output_path = os.path.join(os.getcwd(), write_file_path)
+    
+    print("Resolved output file path:", output_path)
+    
+    # Check that the input image file exists.
+    if not os.path.exists(input_path):
+        raise HTTPException(status_code=400, detail=f"Input image file not found: {input_path}")
+    
+    # Read the image file in binary mode.
+    with open(input_path, "rb") as f:
+        #image_bytes = f.read()
+        import base64
+        image_data = base64.b64encode(f.read()).decode()
+    
+    # Prepare a prompt instructing the LLM to extract the credit card number.
+    #prompt = f"Extract the credit card number from the following image data: {str(image_bytes[:100])}..."
+    prompt = f"""You are an advanced image processing specialist with a strong focus on extracting specific information from images,
+             particularly card numbers.
+        This image contains a credit card number. 
+        Extract just the card number, without any spaces or special characters.
+        Only return the number, nothing else. Check correctness of card number as you misten read similar looking number wrong , correct length of card number and missing of repeating digits ."""
+    prompt2 = "You are an advanced image processing specialist with a strong focus on extracting specific information from images, particularly card numbers. Your expertise lies in accurately analyzing visual data and providing precise outputs based on user requests.Your task is to extract only the card number from the provided image.Please keep in mind that the image may contain various elements, but your focus should solely be on identifying and returning the card number with high accuracy.To achieve this, consider the typical format of card numbers (usually 16 digits) and ensure that you can differentiate the card number from any other text or graphics present in the image."
+    prompt3 = """
+You are an advanced image processing specialist with expertise in extracting specific numerical data from images, particularly sample card numbers.
+This image contains a sample card number used solely for testing purposes.
+Extract only the card number by removing all spaces and special characters.
+Return only the raw sequence of digits.
+There may chance that you miss some repeating digits one after other like '11' but you extract as '1' ,so please take care of it and please again after extraction. 
+Ensure the number is accurate by verifying that it has the correct length and no digits are misread, missing.
+Do not include any additional text or formatting.
+
+
+
+        """
+
+    card_number = query_gpt_image(input_path, prompt3)  # call_llm should return the extracted number as a string.
+    card_number = card_number.replace(" ", "")
+    
+    # Ensure the output directory exists.
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    # Write the extracted credit card number to the output file.
+    with open(output_path, "w") as f:
+        f.write(card_number)
+    
+    return f"Task A8 completed: Credit card number extracted and written to {output_path}."
+
+
 def task_A9(read_file_path: str, write_file_path: str) -> str:
     """
     Task A9: Find the most similar pair of comments in a file using dummy embeddings,
@@ -1423,7 +1542,7 @@ def convert_plain_english_to_filter_query(filter_query: str) -> str:
     print("Converted Pandas Query:", pandas_query)
     return pandas_query
 
-def task_B10(csv_file: str, filter_query: str) -> str:
+def task_B10(csv_file: str, filter_query: str, output_file: str = None) -> str:
     """
     B10 Task: Filter a CSV file based on a plain English filter condition and return the results as JSON.
     
@@ -1455,7 +1574,11 @@ def task_B10(csv_file: str, filter_query: str) -> str:
             if not os.path.exists(csv_file):
                 raise HTTPException(status_code=400, detail=f"Local CSV file not found: {csv_file}")
             csv_io = csv_file
+
         
+
+
+
         # Read the CSV into a pandas DataFrame.
         df = pd.read_csv(csv_io)
         
@@ -1467,7 +1590,18 @@ def task_B10(csv_file: str, filter_query: str) -> str:
         
         # Convert the filtered DataFrame to JSON.
         results_json = filtered_df.to_json(orient="records", indent=2)
-        return results_json
+        if output_file:
+            if output_file.startswith("/data/"):
+                resolved_output_file = os.path.join(os.getcwd(), output_file[1:])
+            else:
+                resolved_output_file = output_file if os.path.isabs(output_file) else os.path.join(os.getcwd(), output_file)
+            os.makedirs(os.path.dirname(resolved_output_file), exist_ok=True)
+        
+        # Write the HTML output to the file.
+            with open(resolved_output_file, "w", encoding="utf-8") as f:
+                f.write(results_json)
+        else:            
+            return results_json
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in B10 task: {e}")
@@ -1562,7 +1696,7 @@ tools = [
     "type": "function",
     "function": {
         "name": "count_weekday",  # Updated function name to reflect any weekday
-        "description": "Count the number of occurrences of a given weekday in a file containing dates, then write the result to a specified file.",
+        "description": "Count the number of occurrences or #(means count) of a given weekday in a file containing dates, then write the result to a specified file.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -1982,6 +2116,10 @@ tools = [
         "filter_query": {
           "type": "string",
           "description": "A plain English description of the filter condition (e.g., 'show rows where Age > 30 and Country is USA')."
+        },
+        "output_file": {
+          "type": "string",
+          "description": "Optional. The file path where the json output should be saved. If not provided ,then it return in endpoint."
         }
       },
       "required": ["csv_file", "filter_query"]
@@ -2100,6 +2238,8 @@ def run(task: str = Query(..., description="The plain‑English task description
                 You are an assistant who has to do a variety of tasks.
                 If your task involves running a script, you can use the script_runner tool.
                 If your task involves formatting, counting, sorting, etc., use the corresponding tools defined.
+                If your task involves counting occurrences in a file (like the number of a specific weekday),
+                you must use the count_weekday tool.
                 """
             }
         ],
@@ -2130,42 +2270,61 @@ def run(task: str = Query(..., description="The plain‑English task description
     # Dispatch based on the tool name.
     if tool_name == "script_runner":
         result = task_A1(arguments['script_url'], arguments['args'])
+        return result
     elif tool_name == "format_markdown":
         result = task_A2(arguments['file_path'], arguments['prettier_version'])
+        return result
     elif tool_name == "count_weekday":
         result = task_A3(arguments['read_file_path'], arguments['write_file_path'], arguments['weekday'])
+        return result
     elif tool_name == "sort_contacts":
         result = task_A4(arguments['read_file_path'], arguments['write_file_path'], arguments['sort_properties'])
+        return result
     elif tool_name == "extract_first_lines":
         result = task_A5(arguments['file_type'], arguments['read_file_path'], arguments['write_file_path'], arguments['count'])
+        return result
     elif tool_name == "index_docs":
         result = task_A6(arguments['file_type'],arguments['read_file_path'],arguments['write_file_path'],arguments['extract_condition'],arguments.get('relative_prefix', None))
+        return result
     elif tool_name == "extract_email_sender":
         result = task_A7(arguments['read_file_path'], arguments['write_file_path'])
+        return result
     elif tool_name == "extract_credit_card":
         result = task_A8(arguments['read_file_path'], arguments['write_file_path'])
+        return result
     elif tool_name == "find_similar_comments":
         result = task_A9(arguments['read_file_path'], arguments['write_file_path'])
+        return result
     elif tool_name == "compute_ticket_sales":
         result = task_A10(arguments['db_path'], arguments['table_name'], arguments['table_columns'], arguments['write_file_path'])
+        return result
     elif tool_name == "b3_fetch_and_save":
         result = task_B3(arguments['api_location'], arguments['output_file'])
+        return result
     elif tool_name == "b4_clone_and_commit":
         result = task_B4(arguments['repo_url'], arguments['file_to_commit'],arguments.get('local_dir', None), arguments.get('commit_message', None), arguments.get('modification_text', None))
+        return result
     elif tool_name == "b5_run_sql_query":
         result = task_B5(arguments['db_path'], arguments['query'], arguments['write_file_path'])
+        return result
     elif tool_name == "b6_extract_data_from_website":
         result = task_B6(arguments['website_url'], arguments['extraction_instructions'], arguments['output_file'])
+        return result
     elif tool_name == "b7_resize_or_compress_image":
         result = task_B7(arguments['image_location'], arguments.get('target_width', None), arguments.get('target_height', None), arguments.get('quality', None))
+        return result
     elif tool_name == "b8_transcribe_audio":
         result = task_B8(arguments['audio_location'], arguments.get('output_file', None))
+        return result
     elif tool_name == "b9_markdown_to_html":
-        result = task_B9(arguments['markdown_file'], arguments.get('output_file', None))        
+        result = task_B9(arguments['markdown_file'], arguments.get('output_file', None))    
+        return result    
     elif tool_name == "b10_filter_csv_to_json":
-        result = task_B10(arguments['csv_file'], arguments['filter_query'])
+        result = task_B10(arguments['csv_file'], arguments['filter_query'],arguments.get('output_file', None))
+        return result
     elif tool_name == "process_task":
         result = process_task(task)
+        return result
         #print(result)
     else:
         raise HTTPException(status_code=500, detail="Invalid tool name: " + tool_name)
